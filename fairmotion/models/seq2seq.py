@@ -41,6 +41,10 @@ class Seq2Seq(nn.Module):
         outputs = self.decoder(
             tgt, hidden, cell, max_len, teacher_forcing_ratio,
         )
+        # print('outputs')
+        # print(outputs.size())
+        # torch.Size([64, 24, 216])
+        # (batch, seq_len, input_dim)
         return outputs
 
 

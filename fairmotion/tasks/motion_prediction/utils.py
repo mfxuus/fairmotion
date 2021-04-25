@@ -14,6 +14,7 @@ from fairmotion.models import (
     rnn,
     seq2seq,
     transformer,
+    spatio_temporal_transformer
 )
 from fairmotion.tasks.motion_prediction import dataset as motion_dataset
 from fairmotion.utils import constants
@@ -60,8 +61,9 @@ def flatten_angles(arr, rep):
 
 
 def multiprocess_convert(arr, convert_fn):
-    pool = Pool(40)
-    result = list(pool.map(convert_fn, arr))
+    # pool = Pool(2)
+    # result = list(pool.map(convert_fn, arr))
+    result = list(convert_fn(arr))
     return result
 
 
@@ -113,7 +115,8 @@ def prepare_dataset(
 
 
 def prepare_model(
-    input_dim, hidden_dim, device, num_layers=1, architecture="seq2seq"
+    input_dim, hidden_dim, device, num_layers=1, architecture="seq2seq",
+    pred_len=24, precision=None, input_len=None
 ):
     if architecture == "rnn":
         model = rnn.RNN(input_dim, hidden_dim, num_layers)
@@ -138,9 +141,17 @@ def prepare_model(
         model = transformer.TransformerModel(
             input_dim, hidden_dim, 4, hidden_dim, num_layers,
         )
+    elif architecture == "spatio_temporal":
+        model = spatio_temporal_transformer.SpatioTemporalTransformer(
+            24, hidden_dim, input_len=input_len, pred_len=pred_len
+        )
     model = model.to(device)
     model.zero_grad()
-    model.double()
+    if precision == "float":
+        model.half()
+    else:
+        model.double()
+    # model.double()
     return model
 
 

@@ -33,7 +33,7 @@ def prepare_model(path, num_predictions, args, device):
     return model
 
 
-def run_model(model, data_iter, max_len, device, mean, std):
+def run_model(model, data_iter, max_len, device, mean, std, arch=None):
     pred_seqs = []
     src_seqs, tgt_seqs = [], []
     for src_seq, tgt_seq in data_iter:
@@ -41,7 +41,7 @@ def run_model(model, data_iter, max_len, device, mean, std):
         src_seqs.extend(src_seq.to(device="cpu").numpy())
         tgt_seqs.extend(tgt_seq.to(device="cpu").numpy())
         pred_seq = (
-            generate.generate(model, src_seq, max_len, device)
+            generate.generate(model, src_seq, max_len, device, arch)
             .to(device="cpu")
             .numpy()
         )
@@ -85,7 +85,7 @@ def save_motion_files(seqs_T, args):
     utils.create_dir_if_absent(os.path.join(args.save_output_path, "ref"))
     utils.create_dir_if_absent(os.path.join(args.save_output_path, "pred"))
 
-    pool = Pool(10)
+    pool = Pool(2)
     indices = range(len(seqs_T[0]))
     skels = [amass_dip_motion.skel for _ in indices]
     pool.starmap(
@@ -106,9 +106,9 @@ def calculate_metrics(pred_seqs, tgt_seqs):
     return mae
 
 
-def test_model(model, dataset, rep, device, mean, std, max_len=None):
+def test_model(model, dataset, rep, device, mean, std, max_len=None, arch=None):
     pred_seqs, src_seqs, tgt_seqs = run_model(
-        model, dataset, max_len, device, mean, std,
+        model, dataset, max_len, device, mean, std, arch
     )
     seqs_T = convert_to_T(pred_seqs, src_seqs, tgt_seqs, rep)
     # Calculate metric only when generated sequence has same shape as reference

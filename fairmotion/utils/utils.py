@@ -55,6 +55,8 @@ def run_parallel(func, iterable, num_cpus=20, **kwargs):
         Flattened list of results from running the function on iterable
         arguments
     """
+    num_cpus = 5
+    print(f'run_parallel with num_cpus: {num_cpus}')
     func_with_kwargs = partial(func, **kwargs)
     with Pool(processes=num_cpus) as pool:
         results = pool.map(func_with_kwargs, iterable)

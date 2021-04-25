@@ -83,7 +83,7 @@ def process_split(
     data = fairmotion_utils.run_parallel(
         process_file,
         all_fnames,
-        num_cpus=40,
+        num_cpus=15,
         create_windows=create_windows,
         convert_fn=convert_fn,
         lengths=(src_len, tgt_len),
