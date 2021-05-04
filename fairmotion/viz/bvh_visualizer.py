@@ -1,4 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
+import sys
+sys.path.append('E:\\3_Courses\\GA-CS-7643\\final_project\\fairmotion')
+
 
 import argparse
 import numpy as np

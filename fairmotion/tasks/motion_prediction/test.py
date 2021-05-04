@@ -1,4 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
+import sys
+sys.path.append('E:\\3_Courses\\GA-CS-7643\\final_project\\fairmotion')
+
+
+'''
+python fairmotion\fairmotion\tasks\motion_prediction\test.py --save-model-path saved_models\spatio_temporal_ACCAD --preprocessed-path processed_data\ACCAD\rotmat --architecture spatio_temporal --hidden-dim 64 --input-len 120 --pred-len 24
+python fairmotion\fairmotion\tasks\motion_prediction\test.py --save-model-path saved_models\seq2seq_ACCAD --preprocessed-path processed_data\ACCAD\rotmat --architecture seq2seq
+'''
+
 
 import argparse
 import logging
@@ -27,6 +36,8 @@ def prepare_model(path, num_predictions, args, device):
         device=device,
         num_layers=args.num_layers,
         architecture=args.architecture,
+        input_len=args.input_len,
+        pred_len=args.pred_len
     )
     model.load_state_dict(torch.load(path))
     model.eval()
@@ -82,19 +93,20 @@ def save_motion_files(seqs_T, args):
     amass_dip_motion = amass_dip.load(
         file=None, load_skel=True, load_motion=False,
     )
-    utils.create_dir_if_absent(os.path.join(args.save_output_path, "ref"))
-    utils.create_dir_if_absent(os.path.join(args.save_output_path, "pred"))
+    # utils.create_dir_if_absent(os.path.join(args.save_output_path, "ref"))
+    # utils.create_dir_if_absent(os.path.join(args.save_output_path, "pred"))
+    os.makedirs(os.path.join(args.save_output_path, "ref"), exist_ok=True)
+    os.makedirs(os.path.join(args.save_output_path, "pred"), exist_ok=True)
 
-    pool = Pool(2)
+    # pool = Pool(2)
     indices = range(len(seqs_T[0]))
     skels = [amass_dip_motion.skel for _ in indices]
-    pool.starmap(
-        save_seq, [list(zip(indices, *seqs_T, skels))[i] for i in idxs_to_save]
-    )
+    for pair in [list(zip(indices, *seqs_T, skels))[i] for i in idxs_to_save]:
+        save_seq(*pair)
 
 
 def calculate_metrics(pred_seqs, tgt_seqs):
-    metric_frames = [6, 12, 18, 24]
+    metric_frames = [6, 12, 18, 24, 60]
     R_pred, _ = conversions.T2Rp(pred_seqs)
     R_tgt, _ = conversions.T2Rp(tgt_seqs)
     euler_error = metrics.euler_diff(
@@ -119,6 +131,12 @@ def test_model(model, dataset, rep, device, mean, std, max_len=None, arch=None):
 
 
 def main(args):
+
+    if args.precision == 'half':
+        torch.set_default_tensor_type(torch.HalfTensor)
+    else:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logging.info("Preparing dataset")
     dataset, mean, std = utils.prepare_dataset(
@@ -219,8 +237,27 @@ if __name__ == "__main__":
             "transformer",
             "transformer_encoder",
             "rnn",
+            "spatio_temporal"
         ],
     )
-
+    parser.add_argument(
+        "--input-len",
+        type=int,
+        help="Length to train on",
+        default=None,
+    )
+    parser.add_argument(
+        "--pred-len",
+        type=int,
+        help="Length to predict on",
+        default=None,
+    )
+    parser.add_argument(
+        "--precision",
+        type=str,
+        help="Model precision",
+        default="double",
+        choices=["half", "double"],
+    )
     args = parser.parse_args()
     main(args)

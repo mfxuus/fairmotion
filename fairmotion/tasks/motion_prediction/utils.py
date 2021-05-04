@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-
+import sys
+sys.path.append('E:\\3_Courses\\GA-CS-7643\\final_project\\fairmotion')
 
 import numpy as np
 import os
@@ -61,8 +62,6 @@ def flatten_angles(arr, rep):
 
 
 def multiprocess_convert(arr, convert_fn):
-    # pool = Pool(2)
-    # result = list(pool.map(convert_fn, arr))
     result = list(convert_fn(arr))
     return result
 
@@ -98,7 +97,7 @@ def unnormalize(arr, mean, std):
 
 
 def prepare_dataset(
-    train_path, valid_path, test_path, batch_size, device, shuffle=False,
+    train_path, valid_path, test_path, batch_size, device, shuffle=False, precision='double'
 ):
     dataset = {}
     for split, split_path in zip(
@@ -109,14 +108,14 @@ def prepare_dataset(
             mean = dataset["train"].dataset.mean
             std = dataset["train"].dataset.std
         dataset[split] = motion_dataset.get_loader(
-            split_path, batch_size, device, mean, std, shuffle,
+            split_path, batch_size, device, mean, std, shuffle, precision=precision
         )
     return dataset, mean, std
 
 
 def prepare_model(
-    input_dim, hidden_dim, device, num_layers=1, architecture="seq2seq",
-    pred_len=24, precision=None, input_len=None
+    input_dim, hidden_dim, device, num_layers=1, architecture="seq2seq", precision=None,
+    pred_len=None, input_len=None
 ):
     if architecture == "rnn":
         model = rnn.RNN(input_dim, hidden_dim, num_layers)
@@ -142,16 +141,21 @@ def prepare_model(
             input_dim, hidden_dim, 4, hidden_dim, num_layers,
         )
     elif architecture == "spatio_temporal":
+        # hardcoded to 24 joints for now...
         model = spatio_temporal_transformer.SpatioTemporalTransformer(
-            24, hidden_dim, input_len=input_len, pred_len=pred_len
+            24, hidden_dim, pred_len=pred_len, input_len=input_len, L=num_layers
+        )
+    elif architecture == "st_transformer":
+        model = spatio_temporal_transformer.AutoRegressiveSpatioTemporalTransformer(
+            input_dim, hidden_dim, M=9, L=num_layers
         )
     model = model.to(device)
     model.zero_grad()
-    if precision == "float":
+    if precision == "half":
         model.half()
     else:
         model.double()
-    # model.double()
+    # print(model)
     return model
 
 

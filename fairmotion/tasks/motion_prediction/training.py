@@ -29,6 +29,11 @@ def set_seeds():
 
 
 def train(args):
+    if args.precision == 'half':
+        torch.set_default_tensor_type(torch.HalfTensor)
+    else:
+        torch.set_default_tensor_type(torch.DoubleTensor)
+
     fairmotion_utils.create_dir_if_absent(args.save_model_path)
     logging.info(args._get_kwargs())
     utils.log_config(args.save_model_path, args)
@@ -47,17 +52,12 @@ def train(args):
         batch_size=args.batch_size,
         device=device,
         shuffle=args.shuffle,
+        precision=args.precision
     )
-
-    print(len(dataset['train']))
-    print(len(dataset['test']))
-    print(len(dataset['validation']))
 
     # number of predictions per time step = num_joints * angle representation
     # shape is (batch_size, seq_len, num_predictions)
-    a, tgt_len, num_predictions = next(iter(dataset["train"]))[1].shape
-    print('tgt_len: ', tgt_len)
-    print('a: ', a)
+    _, tgt_len, num_predictions = next(iter(dataset["train"]))[1].shape
 
     model = utils.prepare_model(
         input_dim=num_predictions,
@@ -65,16 +65,10 @@ def train(args):
         device=device,
         num_layers=args.num_layers,
         architecture=args.architecture,
-        pred_len=args.pred_len,
         precision=args.precision,
+        pred_len=args.pred_len,
         input_len=args.input_len,
     )
-
-
-    # if args.precision == 'float':
-    #     torch.set_default_tensor_type(torch.float16)
-    # else:
-    #     torch.set_default_tensor_type(torch.DoubleTensor)
 
     criterion = nn.MSELoss()
     model.init_weights()
@@ -82,29 +76,22 @@ def train(args):
 
     epoch_loss = 0
     for iterations, (src_seqs, tgt_seqs) in enumerate(dataset["train"]):
-        # print(args.precision)
-        if args.precision == "float":
-            src_seqs, tgt_seqs = src_seqs.half(), tgt_seqs.half()
-        # src_seqs, tgt_seqs = src_seqs.half(), tgt_seqs.half()
-        # print(src_seqs.type(), tgt_seqs.type())
         model.eval()
+        print(iterations)
         src_seqs, tgt_seqs = src_seqs.to(device), tgt_seqs.to(device)
-        # print(src_seqs.size(), tgt_seqs.size())
+        if args.precision == "half":
+            src_seqs, tgt_seqs = src_seqs.half(), tgt_seqs.half()
         if args.architecture == 'spatio_temporal':
-            # print(model)
-            with torch.cuda.amp.autocast():
-                outputs = model(src_seqs, tgt_seqs)
+            outputs = model(src_seqs)
         else:
             outputs = model(src_seqs, tgt_seqs, teacher_forcing_ratio=1,)
-        # print(outputs.size())
-        # print(tgt_seqs.size())
         loss = criterion(outputs, tgt_seqs)
-        loss.detach()
         epoch_loss += loss.item()
+    print('evaluating!')
     epoch_loss = epoch_loss / (iterations + 1)
     val_loss = generate.eval(
         model, criterion, dataset["validation"], args.batch_size, device,
-        architecture=args.architecture
+        args.architecture
     )
     logging.info(
         "Before training: "
@@ -126,21 +113,19 @@ def train(args):
             f"teacher_forcing_ratio={teacher_forcing_ratio}"
         )
         for iterations, (src_seqs, tgt_seqs) in enumerate(dataset["train"]):
-            if args.precision == "float":
-                src_seqs, tgt_seqs = src_seqs.half(), tgt_seqs.half()
             if iterations % 20 == 0:
                 print(f'Epoch {epoch}; Iteration: {iterations}')
-            # if iterations > 200:
-            #     break
             opt.optimizer.zero_grad()
             src_seqs, tgt_seqs = src_seqs.to(device), tgt_seqs.to(device)
+            if args.precision == "half":
+                src_seqs, tgt_seqs = src_seqs.half(), tgt_seqs.half()
             if args.architecture == 'spatio_temporal':
-                outputs = model(src_seqs, tgt_seqs)
+                outputs = model(src_seqs)
             else:
                 outputs = model(
                     src_seqs, tgt_seqs, teacher_forcing_ratio=teacher_forcing_ratio
                 )
-            outputs = outputs.double()
+            # outputs = outputs.double()
             loss = criterion(
                 outputs,
                 utils.prepare_tgt_seqs(args.architecture, src_seqs, tgt_seqs),
@@ -152,7 +137,7 @@ def train(args):
         training_losses.append(epoch_loss)
         val_loss = generate.eval(
             model, criterion, dataset["validation"], args.batch_size, device,
-            architecture=args.architecture
+            args.architecture
         )
         val_losses.append(val_loss)
         opt.epoch_step(val_loss=val_loss)
@@ -161,7 +146,7 @@ def train(args):
             f"Validation loss {val_loss} | "
             f"Iterations {iterations + 1}"
         )
-        if epoch % args.save_model_frequency == 0:
+        if epoch % args.save_model_frequency == 0 or ((epoch + 1) == args.epochs):
             _, rep = os.path.split(args.preprocessed_path.strip("/"))
             _, mae = test.test_model(
                 model=model,
@@ -274,6 +259,13 @@ if __name__ == "__main__":
         choices=["adam", "sgd", "noamopt"],
     )
     parser.add_argument(
+        "--precision",
+        type=str,
+        help="Model precision",
+        default="double",
+        choices=["half", "double"],
+    )
+    parser.add_argument(
         "--pred-len",
         type=int,
         help="Length to predict",
@@ -284,13 +276,6 @@ if __name__ == "__main__":
         type=int,
         help="Length to train on",
         default=120,
-    )
-    parser.add_argument(
-        "--precision",
-        type=str,
-        help="Model precision",
-        default="double",
-        choices=["float", "double"],
     )
     args = parser.parse_args()
     main(args)

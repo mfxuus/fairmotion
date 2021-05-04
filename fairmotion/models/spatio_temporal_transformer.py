@@ -93,14 +93,24 @@ class AutoRegressiveSpatioTemporalTransformer(nn.Module):
 
 class SpatioTemporalTransformer(nn.Module):
 
-    def __init__(self, N, D, M=9, L=4, dropout_rate=0.1, num_heads=4,
-            feedforward_size=256, input_len=None, pred_len=None, device=None):
+    def __init__(self, N, D, M=9, L=1, dropout_rate=0.1, num_heads=4,
+            feedforward_size=128, input_len=None, pred_len=None, device=None):
         """
         :param N: The number of joints that are in each pose in
         the input.
         :param D: The size of the initial joint embeddings.
         """
         super(SpatioTemporalTransformer, self).__init__()
+
+        print('Params:')
+        print(f'N = {N}')
+        print(f'D = {D}')
+        print(f'M = {M}')
+        print(f'L = {L}')
+        print(f'num_heads = {num_heads}')
+        print(f'feedforward_size = {feedforward_size}')
+        print(f'input_len = {input_len}')
+        print(f'pred_len = {pred_len}')
 
         self.device = device
         if self.device is None:
@@ -169,11 +179,10 @@ class JointEmbeddingLayer(nn.Module):
         # I do the W and bias initialization like this to ensure that the weights 
         # are initialized exactly like Pytorch does it.
         linears = [nn.Linear(in_features=M, out_features=D) for _ in range(N)]
-        self.W = nn.Parameter(torch.stack([lin.weight for lin in linears]).permute(0, 2, 1), requires_grad=True).to(device)
-        self.bias = nn.Parameter(torch.stack([lin.bias for lin in linears]).unsqueeze(0).unsqueeze(0), requires_grad=True).to(device)
+        self.W = nn.Parameter(torch.stack([lin.weight for lin in linears]).permute(0, 2, 1).to(device), requires_grad=True)
+        self.bias = nn.Parameter(torch.stack([lin.bias for lin in linears]).unsqueeze(0).unsqueeze(0).to(device), requires_grad=True)
         # self.W2 = nn.Parameter(torch.stack([lin.weight for lin in linears]).permute(0, 2, 1), requires_grad=True)
         # self.bias2 = nn.Parameter(torch.stack([lin.bias for lin in linears]).unsqueeze(0).unsqueeze(0), requires_grad=True)
-
         # print(self.W2.type())
         # print(self.bias2.type())
         # Saving these because they are helpful for reshaping inputs / outputs
@@ -186,8 +195,6 @@ class JointEmbeddingLayer(nn.Module):
         output shape: (B, T, N*D) 
         """
         # print(inputs.type())
-        print(self.W.type())
-        print(self.bias.type())
         inputs = convert_joints_from_3d_to_4d(inputs, self.N, self.M)
         out = torch.einsum("btnm,nmd->btnd", inputs, self.W) + self.bias
         return convert_joints_from_4d_to_3d(out)
@@ -336,7 +343,7 @@ class SpatialAttentionHead(nn.Module):
         B, N, D = inputs.size()
         k_outputs = self.k(inputs)
         v_outputs = self.v(inputs)
-        q_outputs = torch.zeros(B, N, self.F).to(self.device).half()
+        q_outputs = torch.zeros(B, N, self.F).to(self.device)
         i = 0
         for q in self.joint_Qs:
             q_outputs[:, i, :] = q(inputs[:, i, :])

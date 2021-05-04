@@ -20,7 +20,7 @@ def eval(model, criterion, dataset, batch_size, device, architecture=None):
                 seed_tgt_seqs.to(device),
             )
             if architecture == 'spatio_temporal':
-                outputs = model(src_seqs, tgt_seqs)
+                outputs = model(src_seqs)
             else:
                 outputs = model(
                     src_seqs,
@@ -28,7 +28,7 @@ def eval(model, criterion, dataset, batch_size, device, architecture=None):
                     max_len=max_len,
                     teacher_forcing_ratio=0,
                 )
-            outputs = outputs.double()
+            # outputs = outputs.double()
             loss = criterion(outputs, tgt_seqs)
             eval_loss += loss.item()
         return eval_loss / ((iterations + 1) * batch_size)
@@ -44,7 +44,7 @@ def generate(model, src_seqs, max_len, device, arch):
         tgt_seqs = src_seqs[:, -1].unsqueeze(1)
         src_seqs, tgt_seqs = src_seqs.to(device), tgt_seqs.to(device)
         if arch == 'spatio_temporal':
-            outputs = model(src_seqs, tgt_seqs)
+            outputs = model(src_seqs)
         else:
             outputs = model(
                 src_seqs,
@@ -52,4 +52,5 @@ def generate(model, src_seqs, max_len, device, arch):
                 max_len=max_len,
                 teacher_forcing_ratio=0,
             )
-        return outputs.double()
+        # return outputs.double()
+        return outputs
